@@ -65,6 +65,8 @@ sshmenu
 | `--refresh` | Refresh the list of SSH configuration files |
 | `--list-hosts` | List all SSH hosts from config files |
 | `--check-deps` | Check if all required dependencies are installed |
+| `--uninstall` | Uninstall sshmenu |
+| `--help` | Shows the arguments that can be used |
 
 ### **Example: View All SSH Hosts**
 ```bash

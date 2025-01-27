@@ -889,6 +889,8 @@ case "$1" in
         echo -e "  ${grn}--refresh${DEF}      Refresh the list of SSH configuration files"
         echo -e "  ${grn}--check-deps${DEF}   Check if all required dependencies are installed"
         echo -e "  ${grn}--list-hosts${DEF}   List all SSH hosts from config files"
+        echo -e "  ${grn}--uninstall${DEF}    Remove sshmenu from this system"
+        echo -e "  ${grn}--help${DEF}         Shows this help"
         exit 1
         ;;
 esac
