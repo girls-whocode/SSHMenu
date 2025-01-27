@@ -195,6 +195,43 @@ sshmenu_config_editor() {
     edit_config_option
 }
 
+uninstall_sshmenu() {
+    echo "🛑 Uninstalling SSHMenu..."
+
+    # Remove the SSHMenu script from the install directory
+    if [[ -f "$INSTALL_DIR/$SCRIPT_NAME" ]]; then
+        echo "🔹 Removing SSHMenu script from $INSTALL_DIR..."
+        rm -f "$INSTALL_DIR/$SCRIPT_NAME"
+    else
+        echo "⚠️ SSHMenu script not found in $INSTALL_DIR. Skipping..."
+    fi
+
+    # Ask user if they want to remove the configuration file
+    if [[ -f "$CONFIG_FILE" ]]; then
+        read -p "📝 Do you want to remove your SSHMenu configuration file ($CONFIG_FILE)? (y/N) " -r
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            echo "🗑 Removing configuration file..."
+            rm -f "$CONFIG_FILE"
+        else
+            echo "✅ Configuration file retained."
+        fi
+    fi
+
+    # Check and remove from PATH if it was added during installation
+    if grep -q "$INSTALL_DIR" ~/.bashrc ~/.zshrc ~/.profile 2>/dev/null; then
+        read -p "⚠️ Do you want to remove $INSTALL_DIR from your PATH in shell profiles? (y/N) " -r
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            echo "🔹 Removing PATH modifications from shell profiles..."
+            sed -i "/export PATH=\"$INSTALL_DIR:\$PATH\"/d" ~/.bashrc ~/.zshrc ~/.profile 2>/dev/null
+        else
+            echo "✅ PATH modifications retained."
+        fi
+    fi
+
+    echo "✅ Uninstallation complete!"
+    exit 0
+}
+
 #------------------------{ Add some tabs }------------------------------------------------------------------------------
 tabbed(){
     target=$target gnome-terminal --title=$target --tab -qe "${1/_target_/$target}";
@@ -840,6 +877,10 @@ case "$1" in
             exit 1
         fi
         grep -iE '^Host ' $CONFILES || { echo -e "${RED}No hosts found in SSH configuration.${DEF}"; exit 1; }
+        exit 0
+        ;;
+    --uninstall)
+        uninstall_sshmenu
         exit 0
         ;;
     --help)
