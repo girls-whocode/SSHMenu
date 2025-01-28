@@ -34,6 +34,8 @@ refresh_config_files() {
         # Resolve relative paths (e.g., "./config.d/*") by converting to absolute paths
         if [[ "$include_pattern" == ./* ]]; then
             absolute_pattern="$HOME/.ssh/${include_pattern#./}"
+        elif [[ ! "$include_pattern" =~ ^/ ]]; then  # If it's not an absolute path
+            absolute_pattern="$HOME/.ssh/$include_pattern"
         else
             absolute_pattern="$include_pattern"
         fi
