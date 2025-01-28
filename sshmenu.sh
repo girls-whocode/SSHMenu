@@ -749,32 +749,48 @@ save_tmp(){
     chmod 600 "$tmpfile";
 }
 
-new_list(){
-    list=(); match=
-    for item in "${selected_list[@]}" "${fullist[@]}"; {
-        case         $item:$match    in
-                 *{\ *\ }*:1) break  ;;
-           *{\ $filter\ }*:*) match=1;;
+new_list() {
+    list=()
+    match=
+    for item in "${selected_list[@]}" "${fullist[@]}"; do
+        case $item:$match in
+            *{\ *\ }*:1) break ;;
+            *{\ $filter\ }*:*) match=1 ;;
         esac
         [[ $match ]] && list+=( "$item" )
-    }
+    done
+
     [[ $filter =~ Selected ]] && return
-    [[ ${list[*]} ]] && save_tmp "filter='$filter'" || { list=( "${fullist[@]}" ); rm "$tmpfile"; }
+    [[ ${list[*]} ]] && save_tmp "filter='$filter'" || {
+        list=( "${fullist[@]}" )
+        rm "$tmpfile"
+    }
 }
 
-contents_menu(){
+contents_menu() {
     local filter_tmp=$filter selected=
-    [[  ${selected_list[@]} ]] && selected='Selected_hosts'
+    [[ ${selected_list[@]} ]] && selected='Selected_hosts'
 
     local btns=('SELECT' 'RUN COMMAND' 'BACK' '')
-	filter=$(D "${btns[@]}" --no-items --menu "Select list of hosts:" 0 0 0 "All" $selected "${content[@]}")
-	case $filter:$? in
-             All:0) list=( "${selected_list[@]}" "${fullist[@]}" )
-                    save_tmp       "filter=";;
-               *:3) second_dialog "$filter" ;;
-               *:1) filter=$filter_tmp;;
-               *:0) new_list;;
-	esac        ;   first_dialog
+
+    filter=$(D "${btns[@]}" --no-items --menu "Select list of hosts:" 0 0 0 "All" $selected "${content[@]}")
+
+    case $filter:$? in
+        All:0) 
+            list=( "${selected_list[@]}" "${fullist[@]}" )
+            save_tmp "filter="
+            ;;
+        *:3) 
+            second_dialog "$filter"  # Pass selected group name
+            ;;
+        *:1) 
+            filter=$filter_tmp
+            ;;
+        *:0) 
+            new_list
+            first_dialog  # Ensure only group hosts are shown
+            ;;
+    esac
 }
 
 #-------------{ Selector }--------------------------------------------
@@ -804,20 +820,47 @@ slct_dslct(){
 }
 
 #-------------{ First dialog - Select target host }-------------------
-first_dialog(){
+first_dialog() {
     local btns
-    group= dfilelist=
+    group=
+    dfilelist=
+
+    if [[ -n "$filter" && "$filter" != "All" ]]; then
+        group="$filter"
+    fi
+
     [[ $OPT =~ name ]] && btns=('GET NAME' '' 'EXIT' 'CONTENTS') || btns=('CONNECT' 'RUN COMMAND' 'EXIT' 'CONTENTS')
-	target=$(D "${btns[@]}" --menu "Select host to connect to. $USERNOTE" 0 0 0 "${list[@]//_LINE_/$descline}")
-	case $target:$? in
-       *{\ *\ }*:0) filter=${target//*\{ }; filter=${filter// \}*}; new_list; first_dialog ;;
-       *{\ *\ }*:3) filter=${target//*\{ }; filter=${filter// \}*}; second_dialog "$filter";;
-               *:0) [[ $OPT =~ name ]] && return || { go_to_target; first_dialog; };;
-      	       *:1) bye;;
-               *:2) contents_menu;;
-      	       *:3) second_dialog;;
-               *:*) contents_menu;;
-  	esac
+
+    target=$(D "${btns[@]}" --menu "Select host to connect to. $USERNOTE" 0 0 0 "${list[@]//_LINE_/$descline}")
+
+    case $target:$? in
+        *{\ *\ }*:0) 
+            filter=${target//*\{ }
+            filter=${filter// \}*}
+            new_list
+            first_dialog
+            ;;
+        *{\ *\ }*:3) 
+            filter=${target//*\{ }
+            filter=${filter// \}*}
+            second_dialog "$filter"
+            ;;
+        *:0) 
+            [[ $OPT =~ name ]] && return || { go_to_target; first_dialog; }
+            ;;
+        *:1) 
+            bye
+            ;;
+        *:2) 
+            contents_menu
+            ;;
+        *:3) 
+            second_dialog
+            ;;
+        *:*) 
+            contents_menu
+            ;;
+    esac
 }
 
 #-------------{ Second dialog - Select command }-----------------------
