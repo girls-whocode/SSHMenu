@@ -752,16 +752,22 @@ save_tmp(){
 new_list() {
     list=()
     match=
-    for item in "${selected_list[@]}" "${fullist[@]}"; do
-        case $item:$match in
-            *{\ *\ }*:1) break ;;
-            *{\ $filter\ }*:*) match=1 ;;
-        esac
-        [[ $match ]] && list+=( "$item" )
-    done
+    
+    # Only filter if a group is selected
+    if [[ -n "$filter" && "$filter" != "All" ]]; then
+        for ((i=0; i<${#fullist[@]}; i+=2)); do
+            name="${fullist[$i]}"
+            desc="${fullist[$((i+1))]}"
+            
+            # If description matches the selected group, include in the list
+            [[ "$desc" == "$filter" ]] && list+=("$name" "$desc")
+        done
+    else
+        # No group selected, show everything
+        list=( "${fullist[@]}" )
+    fi
 
-    [[ $filter =~ Selected ]] && return
-    [[ ${list[*]} ]] && save_tmp "filter='$filter'" || {
+    [[ ${#list[@]} -gt 0 ]] && save_tmp "filter='$filter'" || {
         list=( "${fullist[@]}" )
         rm "$tmpfile"
     }
@@ -777,18 +783,19 @@ contents_menu() {
 
     case $filter:$? in
         All:0) 
-            list=( "${selected_list[@]}" "${fullist[@]}" )
-            save_tmp "filter="
-            ;;
-        *:3) 
-            second_dialog "$filter"  # Pass selected group name
-            ;;
-        *:1) 
-            filter=$filter_tmp
+            filter=""   # Reset filter when selecting "All"
+            new_list
+            first_dialog
             ;;
         *:0) 
             new_list
             first_dialog  # Ensure only group hosts are shown
+            ;;
+        *:1) 
+            filter=$filter_tmp
+            ;;
+        *:3) 
+            second_dialog "$filter"  # Pass selected group name
             ;;
     esac
 }
@@ -822,14 +829,15 @@ slct_dslct(){
 #-------------{ First dialog - Select target host }-------------------
 first_dialog() {
     local btns
-    group=
     dfilelist=
 
+    # If a group is selected, only show its hosts
     if [[ -n "$filter" && "$filter" != "All" ]]; then
         group="$filter"
+        btns=('CONNECT' 'RUN COMMAND' 'EXIT' 'CONTENTS')
+    else
+        btns=('CONNECT' 'RUN COMMAND' 'EXIT' 'CONTENTS')
     fi
-
-    [[ $OPT =~ name ]] && btns=('GET NAME' '' 'EXIT' 'CONTENTS') || btns=('CONNECT' 'RUN COMMAND' 'EXIT' 'CONTENTS')
 
     target=$(D "${btns[@]}" --menu "Select host to connect to. $USERNOTE" 0 0 0 "${list[@]//_LINE_/$descline}")
 
