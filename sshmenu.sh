@@ -932,22 +932,23 @@ for file in $CONFILES; do
         hostnames["$name"]=$hostname
         fullist+=("$name" "$desc")  # Add host and description to the list
     done < <(gawk '
-    BEGIN { IGNORECASE=1 }
-    /Host / {
-        strt=1
-        host=$2
-        desc=gensub(/^.*Host .* #(.*)/, "\\1", "g", $0)
-        desc=gensub(/(.*)#.*/, "\\1", "g", desc)
-        next
+    BEGIN { IGNORECASE=1; group="" }
+    /^#HOST GROUP #/ {
+        group=gensub(/^#HOST GROUP #(.*)#/, "\\1", "g", $0);
+        print "group_name", group, group;
+        next;
     }
-    strt && host == "'"$group_id"'"{
-        print "group_name", "group", desc
-        strt=0
+    /Host / {
+        strt=1;
+        host=$2;
+        desc=gensub(/^.*Host .* #(.*)/, "\\1", "g", $0);
+        desc=gensub(/(.*)#.*/, "\\1", "g", desc);
+        next;
     }
     strt && /HostName / {
-        hostname=$2
-        print host, hostname, desc
-        strt=0
+        hostname=$2;
+        print host, hostname, (group ? group : desc);
+        strt=0;
     }' "$file")
 done
 
