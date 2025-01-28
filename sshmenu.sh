@@ -15,17 +15,33 @@ required_packages=("dialog" "gawk")
 # Helper message for missing packages
 install_help="${BLD}sshmenu$DEF requires that the package '${GRN}%s$DEF' is installed.\nType this into the terminal and press return:\n\n\t${BLD}%s$DEF\n\nThen run ${BLD}sshmenu$DEF again."
 
+# Create a temporary file for each user
+tmpfile="/tmp/sshmenurc-$USER"
+log_file="/tmp/sshmenu-debug.log"
+
+# Erase the temp file on each run.
+rm -f "$tmpfile"
+rm -f "$log_file"
+touch "$tmpfile" && chmod 600 "$tmpfile"
+touch "$log_file" && chmod 600 "$log_file"
+
+echo "✅ [DEBUG] tmpfile set to: $tmpfile" | tee -a "$log_file"
+echo "🔍 [DEBUG] tmpfile at start of script: $tmpfile" | tee -a "$log_file"
+
+# SSHMenu Config file checks and tests
 refresh_config_files() {
-    echo "🔄 Refreshing SSH configuration file list..."
+    echo "🔄 Refreshing SSH configuration file list..." | tee -a "$log_file"
 
     # Always start with the main SSH config file
     CONFILES="$HOME/.ssh/config"
 
-    # Extract 'Include' directives and resolve them
-    while IFS= read -r include_pattern; do
-        echo "🔍 Found Include directive: $include_pattern"
+    # Extract 'Include' directives and resolve them properly
+    mapfile -t include_patterns < <(grep -iE '^Include ' "$HOME/.ssh/config" | awk '{print $2}')
 
-        # Resolve relative and absolute paths correctly
+    for include_pattern in "${include_patterns[@]}"; do
+        echo "🔍 Found Include directive: $include_pattern" | tee -a "$log_file"
+
+        # Resolve relative and absolute paths
         if [[ "$include_pattern" == ./* ]]; then
             absolute_pattern="$HOME/.ssh/${include_pattern#./}"
         elif [[ ! "$include_pattern" =~ ^/ ]]; then
@@ -34,15 +50,21 @@ refresh_config_files() {
             absolute_pattern="$include_pattern"
         fi
 
-        echo "🛠 Resolved pattern: $absolute_pattern"
+        echo "🛠 Resolved pattern: $absolute_pattern" | tee -a "$log_file"
 
-        # Expand wildcards properly
-        for file in $(find $absolute_pattern -type f 2>/dev/null); do
+        # Expand all files matching the Include directive
+        while IFS= read -r file; do
             [[ -f "$file" ]] && CONFILES+=" $file" && echo "✅ Added: $file"
-        done
-    done < <(grep -iE '^Include ' "$HOME/.ssh/config" | awk '{print $2}')
+        done < <(find $absolute_pattern -type f 2>/dev/null)
+    done
 
-    echo "🔄 Updated CONFILES: $CONFILES"
+    # Debugging Output
+    echo "🔄 Final CONFILES: $CONFILES"
+
+    # Save updated config files list while preserving other settings
+    save_tmp "CONFILES=\"$CONFILES\""
+    save_tmp "last_run=$(date)"
+    save_tmp "config_created=${config_created:-yes}"
 }
 
 check_confile() {
@@ -51,7 +73,7 @@ check_confile() {
     # Ensure correct permissions
     if [[ $(stat -c "%a %U %G" "$confile") != "600 $USER $USER" ]]; then
         chmod 600 "$confile"
-        echo "Fixed permissions: $confile set to 600."
+        echo "Fixed permissions: $confile set to 600." | tee -a "$log_file"
     fi
 
     # Refresh SSH config files **before sourcing the config**
@@ -62,44 +84,64 @@ check_confile() {
 }
 
 create_config() {
-    echo "Running create_config()..."
+    echo "🚀 [DEBUG] Running create_config()..." | tee -a "$log_file"
+    echo "🛠 Running create_config()..." | tee -a "$log_file"
 
-    # Refresh SSH config files before creating the config
+    # Load previous tmpfile values if they exist
+    if [[ -f "$tmpfile" ]]; then
+        echo "🔍 [DEBUG] Loading previous settings from $tmpfile..." | tee -a "$log_file"
+        source "$tmpfile"
+    fi
+
+    # Refresh SSH config files before modifying tmpfile
     refresh_config_files
 
-    # Define base config without hardcoding CONFILES
+    # Define base config dynamically
     config_opts="# sshmenu Configuration File - do not manually edit, use sshmenu --config to make changes\n"
-    config_opts+="home=$HOME\n"
-    config_opts+="OPT=\n"
-    config_opts+="KEY=$HOME/.ssh/id_rsa.pub\n"
-    config_opts+="CONFILES=\"$CONFILES\"\n"  # Use dynamically updated CONFILES
-    config_opts+="REMOTE=8080\n"
-    config_opts+="LOCAL=18080\n"
-    config_opts+="GUEST=$USER\n"
-    config_opts+="DEST=\"$HOME\"\n"
-    config_opts+="TIME=60\n"
-    config_opts+="EDITOR=nano\n"
-    config_opts+="LSEXIT=true\n"
-    config_opts+="sshfsopt=\n"
-    config_opts+="group_id=group\n"
-    config_opts+="knwhosts=$HOME/.ssh/known_hosts\n"
-    config_opts+="confile=$HOME/.sshmenurc\n"
-    config_opts+="tmpfile=/tmp/sshmenurc-$USER\n"
-    config_opts+="sshmenu_script[0]=$HOME\n"
-    config_opts+="sshmenu_script[1]=.sshmenu_script\n"
-    config_opts+="sshmenu_script[2]=\"\${sshmenu_script[0]}/\${sshmenu_script[1]}\"\n"
+    config_opts+="home=${home:-$HOME}\n"
+    config_opts+="OPT=${OPT:-}\n"
+    config_opts+="KEY=${KEY:-$HOME/.ssh/id_rsa.pub}\n"
+    config_opts+="CONFILES=\"${CONFILES:-$HOME/.ssh/config}\"\n"
+    config_opts+="REMOTE=${REMOTE:-8080}\n"
+    config_opts+="LOCAL=${LOCAL:-18080}\n"
+    config_opts+="GUEST=${GUEST:-$USER}\n"
+    config_opts+="DEST=\"${DEST:-$HOME}\"\n"
+    config_opts+="TIME=${TIME:-60}\n"
+    config_opts+="EDITOR=${EDITOR:-nano}\n"
+    config_opts+="LSEXIT=${LSEXIT:-true}\n"
+    config_opts+="sshfsopt=${sshfsopt:-}\n"
+    config_opts+="group_id=${group_id:-group}\n"
+    config_opts+="knwhosts=${knwhosts:-$HOME/.ssh/known_hosts}\n"
+    config_opts+="confile=${confile:-$HOME/.sshmenurc}\n"
+    config_opts+="tmpfile=${tmpfile:-/tmp/sshmenurc-$USER}\n"
+    config_opts+="sshmenu_script[0]=${sshmenu_script[0]:-$HOME}\n"
+    config_opts+="sshmenu_script[1]=${sshmenu_script[1]:-.sshmenu_script}\n"
+    config_opts+="sshmenu_script[2]=\"${sshmenu_script[2]:-\${sshmenu_script[0]}/\${sshmenu_script[1]}}\"\n"
 
-    echo "Checking if config file exists..."
-
+    # Create or update the main config file
+    echo "📂 Checking if config file exists..." | tee -a "$log_file"
     if [[ ! -f "$HOME/.sshmenurc" ]]; then
-        echo "Config file does not exist, creating it now..."
-        echo -e "$config_opts" > "$HOME/.sshmenurc" || { echo "Failed to create config file"; exit 1; }
-        chmod 600 "$HOME/.sshmenurc" || { echo "Failed to set permissions"; exit 1; }
-        echo "Created new configuration file: $HOME/.sshmenurc"
+        echo "🆕 Config file does not exist, creating it now..." | tee -a "$log_file"
+        echo -e "$config_opts" > "$HOME/.sshmenurc" | tee -a "$log_file"
+        chmod 600 "$HOME/.sshmenurc"
+        echo "✅ Created new configuration file: $HOME/.sshmenurc" | tee -a "$log_file"
     else
-        echo "Config file already exists. Running check_confile..."
+        echo "📂 Config file already exists. Running check_confile..." | tee -a "$log_file"
         check_confile
     fi
+
+    # 🔄 Save configuration to tmpfile while preserving existing values
+    save_tmp "config_created=yes"
+    save_tmp "last_run=$(date)"
+    save_tmp "CONFILES=\"$CONFILES\""
+
+    # 🚀 Debugging: Verify tmpfile contents
+    if [[ ! -s "$tmpfile" ]]; then
+        echo "⚠️ [DEBUG] tmpfile was empty. Ensuring it is not deleted." | tee -a "$log_file"
+        echo "filter='All'" > "$tmpfile" | tee -a "$log_file"
+    fi
+
+    echo "✅ [DEBUG] Finished create_config()" | tee -a "$log_file"
 }
 
 sshmenu_config_editor() {
@@ -202,7 +244,7 @@ sshmenu_config_editor() {
 }
 
 uninstall_sshmenu() {
-    echo "🛑 Uninstalling SSHMenu..."
+    echo "Uninstalling SSHMenu..."
 
     # Remove the SSHMenu script from the install directory
     if [[ -f "$INSTALL_DIR/$SCRIPT_NAME" ]]; then
@@ -599,7 +641,9 @@ bye(){
     [[ $(uname -s) == "Darwin" ]] && lsopts='-G'
     ls $lsopts
     exit 0
-};  trap bye INT
+};  
+
+trap bye INT
 
 #=============> { Dialog functions } <=============================
 do='--output-fd 1 --colors' # dialog common options
@@ -744,64 +788,107 @@ download(){
 }
 
 #-------------{ Switch menu mode to contents view or full list }-----
-save_tmp(){
-    echo "$1" > "$tmpfile";
-    chmod 600 "$tmpfile";
+save_tmp() {
+    local key="${1%%=*}"  # Extract key before '='
+    local value="${1#*=}" # Extract value after '='
+    local log_file="/tmp/sshmenu-debug.log"
+
+    # Prevent empty keys from being saved
+    if [[ -z "$key" ]]; then
+        echo "⚠️ [DEBUG] Empty key detected. Skipping save." | tee -a "$log_file"
+        return 1
+    fi
+
+    echo "🔄 [DEBUG] save_tmp() called: '$key=$value'" | tee -a "$log_file"
+
+    # Ensure tmpfile exists
+    if [[ ! -f "$tmpfile" ]]; then
+        echo "❌ [DEBUG] tmpfile does not exist. Creating it..." | tee -a "$log_file"
+        touch "$tmpfile" || { echo "❌ Failed to create $tmpfile"; return 1; }
+        chmod 600 "$tmpfile"
+    fi
+
+    # Remove old key entries before writing new values
+    grep -v "^${key}=" "$tmpfile" > "$tmpfile.tmp"
+    echo "${key}=${value}" >> "$tmpfile.tmp"
+    mv "$tmpfile.tmp" "$tmpfile"
+
+    # Debugging: Show final tmpfile contents
+    echo "✅ [DEBUG] Updated $tmpfile:" | tee -a "$log_file"
+    cat "$tmpfile" | tee -a "$log_file"
 }
 
 new_list() {
-    list=()  # Reset the list
+    local log_file="/tmp/sshmenu-debug.log"
+    echo "🔄 Running new_list() - Current filter: '$filter'" | tee -a "$log_file"
 
-    # Only filter if a group is selected
+    list=()
+    
+    # Normalize the filter by removing "Servers " if it was added
+    filter=${filter#"Servers "}
+
     if [[ -n "$filter" && "$filter" != "All" ]]; then
-        echo "Applying filter for group: $filter"
-        for ((i=0; i<${#fullist[@]}; i+=2)); do
+        echo "🎯 Filtering for group: $filter" | tee -a "$log_file"
+
+        for ((i = 0; i < ${#fullist[@]}; i += 2)); do
             name="${fullist[$i]}"
-            desc="${fullist[$((i+1))]}"
-            
-            # If description matches the selected group, include in the list
+            desc="${fullist[$((i + 1))]}"
+
+            echo "   🔎 Checking '$name' (Group: '$desc')" | tee -a "$log_file"
+
             if [[ "$desc" == "$filter" ]]; then
                 list+=("$name" "$desc")
-                echo "✅ Added $name to filtered list (Group: $desc)"
+                echo "   ✅ Added: $name (Matched Group: $desc)" | tee -a "$log_file"
             fi
         done
     else
-        # No group selected, show everything
         list=( "${fullist[@]}" )
-        echo "Showing all hosts (no filter applied)"
+        echo "📢 No group selected. Showing all hosts." | tee -a "$log_file"
     fi
 
-    [[ ${#list[@]} -gt 0 ]] && save_tmp "filter='$filter'" || {
-        list=( "${fullist[@]}" )
-        rm -f "$tmpfile"
-    }
+    if [[ ${#list[@]} -eq 0 ]]; then
+        echo "⚠️ [DEBUG] No hosts found for group: '$filter'" | tee -a "$log_file"
+    fi
 }
 
 contents_menu() {
-    local previous_filter=$filter  # Store the last selected filter
+    local log_file="/tmp/sshmenu-debug.log"
+    local previous_filter=$filter  # Store last selected filter before change
+    echo "📝 Entering contents_menu() - Current filter: '$filter'" | tee -a "$log_file"
 
-    # Display available groups
+    # Show available groups
     local btns=('SELECT' 'RUN COMMAND' 'BACK' '')
 
     filter=$(D "${btns[@]}" --no-items --menu "Select list of hosts:" 0 0 0 "All" "${content[@]}")
 
     case $filter:$? in
         All:0) 
-            echo "Resetting filter to show all hosts."
-            filter=""  # Reset filter
-            new_list
-            first_dialog
+            echo "📢 Resetting filter to show all hosts." | tee -a "$log_file"
+            filter="All"
+            save_tmp "filter='$filter'"
+            new_list  # Refresh list
+            first_dialog  # Load the host selection menu
             ;;
+
         *:0) 
-            echo "Filtering by group: $filter"
-            new_list
-            first_dialog  # Ensure only group hosts are shown
+            echo "🎯 Selected group: $filter - Updating list" | tee -a "$log_file"
+            save_tmp "filter='$filter'"
+            new_list  # Refresh list based on the selected group
+            if [[ ${#list[@]} -eq 0 ]]; then
+                echo "❌ [DEBUG] No hosts found, returning to contents menu" | tee -a "$log_file"
+                contents_menu  # Go back to group selection if no hosts are found
+            else
+                first_dialog  # Correctly move to the filtered host list
+            fi
             ;;
+
         *:1) 
-            filter=$previous_filter  # Restore previous filter if canceled
+            filter=$previous_filter  # Restore last filter if canceled
+            echo "↩️ [DEBUG] Restoring previous filter: $filter" | tee -a "$log_file"
             ;;
+
         *:3) 
-            second_dialog "$filter"  # Pass selected group name
+            second_dialog "$filter"
             ;;
     esac
 }
@@ -836,14 +923,16 @@ slct_dslct(){
 first_dialog() {
     local btns
 
+    echo "📝 Entering first_dialog() - Filter: '$filter'"
+
     # If a group is selected, only show its hosts
     if [[ -n "$filter" && "$filter" != "All" ]]; then
         group="$filter"
-        btns=('CONNECT' 'RUN COMMAND' 'EXIT' 'CONTENTS')
-        echo "Displaying filtered list for group: $group"
+        btns=('CONNECT' 'RUN COMMAND' 'BACK' 'CONTENTS')
+        echo "🎯 Displaying filtered list for group: $group"
     else
         btns=('CONNECT' 'RUN COMMAND' 'EXIT' 'CONTENTS')
-        echo "Displaying all hosts (no filter applied)"
+        echo "📢 Displaying all hosts (no filter applied)"
     fi
 
     target=$(D "${btns[@]}" --menu "Select host to connect to. $USERNOTE" 0 0 0 "${list[@]//_LINE_/$descline}")
@@ -852,7 +941,7 @@ first_dialog() {
         *{\ *\ }*:0) 
             filter=${target//*\{ }
             filter=${filter// \}*}
-            echo "Selected new group: $filter"
+            echo "🎯 Selected new group: $filter"
             new_list
             first_dialog
             ;;
@@ -961,6 +1050,7 @@ case "$1" in
 esac
 
 #-------------{ Check for and create the ~/.sshmenurc }------------------------------
+save_tmp
 create_config
 
 #-------------{ Create the list of hosts. Get hosts and descriptions from ~/.ssh/config* }------------------------------
