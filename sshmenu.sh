@@ -750,49 +750,55 @@ save_tmp(){
 }
 
 new_list() {
-    list=()
-    match=
-    
+    list=()  # Reset the list
+
     # Only filter if a group is selected
     if [[ -n "$filter" && "$filter" != "All" ]]; then
+        echo "Applying filter for group: $filter"
         for ((i=0; i<${#fullist[@]}; i+=2)); do
             name="${fullist[$i]}"
             desc="${fullist[$((i+1))]}"
             
             # If description matches the selected group, include in the list
-            [[ "$desc" == "$filter" ]] && list+=("$name" "$desc")
+            if [[ "$desc" == "$filter" ]]; then
+                list+=("$name" "$desc")
+                echo "✅ Added $name to filtered list (Group: $desc)"
+            fi
         done
     else
         # No group selected, show everything
         list=( "${fullist[@]}" )
+        echo "Showing all hosts (no filter applied)"
     fi
 
     [[ ${#list[@]} -gt 0 ]] && save_tmp "filter='$filter'" || {
         list=( "${fullist[@]}" )
-        rm "$tmpfile"
+        rm -f "$tmpfile"
     }
 }
 
 contents_menu() {
-    local filter_tmp=$filter selected=
-    [[ ${selected_list[@]} ]] && selected='Selected_hosts'
+    local previous_filter=$filter  # Store the last selected filter
 
+    # Display available groups
     local btns=('SELECT' 'RUN COMMAND' 'BACK' '')
 
-    filter=$(D "${btns[@]}" --no-items --menu "Select list of hosts:" 0 0 0 "All" $selected "${content[@]}")
+    filter=$(D "${btns[@]}" --no-items --menu "Select list of hosts:" 0 0 0 "All" "${content[@]}")
 
     case $filter:$? in
         All:0) 
-            filter=""   # Reset filter when selecting "All"
+            echo "Resetting filter to show all hosts."
+            filter=""  # Reset filter
             new_list
             first_dialog
             ;;
         *:0) 
+            echo "Filtering by group: $filter"
             new_list
             first_dialog  # Ensure only group hosts are shown
             ;;
         *:1) 
-            filter=$filter_tmp
+            filter=$previous_filter  # Restore previous filter if canceled
             ;;
         *:3) 
             second_dialog "$filter"  # Pass selected group name
@@ -829,14 +835,15 @@ slct_dslct(){
 #-------------{ First dialog - Select target host }-------------------
 first_dialog() {
     local btns
-    dfilelist=
 
     # If a group is selected, only show its hosts
     if [[ -n "$filter" && "$filter" != "All" ]]; then
         group="$filter"
         btns=('CONNECT' 'RUN COMMAND' 'EXIT' 'CONTENTS')
+        echo "Displaying filtered list for group: $group"
     else
         btns=('CONNECT' 'RUN COMMAND' 'EXIT' 'CONTENTS')
+        echo "Displaying all hosts (no filter applied)"
     fi
 
     target=$(D "${btns[@]}" --menu "Select host to connect to. $USERNOTE" 0 0 0 "${list[@]//_LINE_/$descline}")
@@ -845,6 +852,7 @@ first_dialog() {
         *{\ *\ }*:0) 
             filter=${target//*\{ }
             filter=${filter// \}*}
+            echo "Selected new group: $filter"
             new_list
             first_dialog
             ;;
