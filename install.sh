@@ -5,17 +5,19 @@ SYSTEM_INSTALL=false
 SCRIPT_URL="https://raw.githubusercontent.com/girls-whocode/sshmenu/main/sshmenu.sh"
 SCRIPT_NAME="sshmenu"
 
-# Detect if running as root, suggest /usr/local/bin
+# Detect if running as root, install to /usr/local/bin
 if [[ $EUID -eq 0 ]]; then
     INSTALL_DIR="/usr/local/bin"
     SYSTEM_INSTALL=true
 fi
 
+echo "🔹 Installing SSHMenu to $INSTALL_DIR..."
+
 # Ensure the install directory exists
 mkdir -p "$INSTALL_DIR"
 
-# Download sshmenu.sh if it doesn't exist
-echo "🔹 Downloading SSHMenu script..."
+# Download sshmenu.sh
+echo "🔹 Downloading SSHMenu script from GitHub..."
 curl -sSL "$SCRIPT_URL" -o "$INSTALL_DIR/$SCRIPT_NAME"
 
 # Verify download success
@@ -31,12 +33,14 @@ chmod +x "$INSTALL_DIR/$SCRIPT_NAME"
 CURRENT_SHELL=$(basename "$SHELL")
 
 # Determine the correct shell profile file
-case "$CURRENT_SHELL" in
-    bash)  SHELL_CONFIG="$HOME/.bashrc" ;;
-    zsh)   SHELL_CONFIG="$HOME/.zshrc" ;;
-    fish)  SHELL_CONFIG="$HOME/.config/fish/config.fish" ;;
-    *)     SHELL_CONFIG="" ;;
-esac
+SHELL_CONFIG=""
+if [[ $SYSTEM_INSTALL == false ]]; then
+    case "$CURRENT_SHELL" in
+        bash) SHELL_CONFIG="$HOME/.bashrc" ;;
+        zsh)  SHELL_CONFIG="$HOME/.zshrc" ;;
+        fish) SHELL_CONFIG="$HOME/.config/fish/config.fish" ;;
+    esac
+fi
 
 # Check if the install directory is in the PATH
 if ! echo "$PATH" | grep -q "$INSTALL_DIR"; then
@@ -46,7 +50,7 @@ if ! echo "$PATH" | grep -q "$INSTALL_DIR"; then
     export PATH="$INSTALL_DIR:$PATH"
     echo "✅ Updated PATH for this session."
 
-    # Add to the correct shell profile for persistence
+    # Add to the correct shell profile for persistence (only for non-root users)
     if [[ -n "$SHELL_CONFIG" ]]; then
         if ! grep -Fxq "export PATH=\"$INSTALL_DIR:\$PATH\"" "$SHELL_CONFIG"; then
             echo "export PATH=\"$INSTALL_DIR:\$PATH\"" >> "$SHELL_CONFIG"
@@ -63,4 +67,4 @@ else
 fi
 
 # Success message
-echo "🚀 SSHMenu installed successfully! You can now run it using: sshmenu"
+echo "SSHMenu installed successfully! You can now run it using: sshmenu"
