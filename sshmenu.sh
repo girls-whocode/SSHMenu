@@ -940,6 +940,10 @@ for file in $CONFILES; do
         desc=gensub(/(.*)#.*/, "\\1", "g", desc)
         next
     }
+    strt && host == "'"$group_id"'"{
+        print "group_name", "group", desc
+        strt=0
+    }
     strt && /HostName / {
         hostname=$2
         print host, hostname, desc
