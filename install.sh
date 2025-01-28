@@ -54,4 +54,4 @@ else
 fi
 
 # Success message
-echo "🚀 SSHMenu installed! You can now run it immediately using: sshmenu"
+echo "SSHMenu installed! You can now run it immediately using: sshmenu"
