@@ -27,7 +27,7 @@ SSHMenu is a powerful and user-friendly SSH session manager, originally based on
 ### **Quick Install:**
 Run the following commands:
 ```bash
-curl -sSL https://github.com/YOUR-USERNAME/sshmenu/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/girls-whocode/sshmenu/main/install.sh | bash
 ```
 This will:
 - Copy the `sshmenu.sh` script to `~/.local/bin/sshmenu`
@@ -37,7 +37,7 @@ This will:
 ### **Manual Install:**
 1. Clone the repository:
    ```bash
-   git clone https://github.com/YOUR-USERNAME/sshmenu.git
+   git clone https://github.com/girls-whocode/sshmenu.git
    cd sshmenu
    ```
 2. Run the installer:

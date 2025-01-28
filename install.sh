@@ -2,6 +2,8 @@
 
 INSTALL_DIR="$HOME/.local/bin"
 SYSTEM_INSTALL=false
+SCRIPT_URL="https://raw.githubusercontent.com/girls-whocode/sshmenu/main/sshmenu.sh"
+SCRIPT_NAME="sshmenu"
 
 # Detect if running as root, suggest /usr/local/bin
 if [[ $EUID -eq 0 ]]; then
@@ -12,11 +14,18 @@ fi
 # Ensure the install directory exists
 mkdir -p "$INSTALL_DIR"
 
-# Copy sshmenu.sh to the install location
-cp sshmenu.sh "$INSTALL_DIR/sshmenu"
+# Download sshmenu.sh if it doesn't exist
+echo "🔹 Downloading SSHMenu script..."
+curl -sSL "$SCRIPT_URL" -o "$INSTALL_DIR/$SCRIPT_NAME"
+
+# Verify download success
+if [[ ! -f "$INSTALL_DIR/$SCRIPT_NAME" ]]; then
+    echo "❌ Error: Failed to download sshmenu.sh from GitHub."
+    exit 1
+fi
 
 # Make it executable
-chmod +x "$INSTALL_DIR/sshmenu"
+chmod +x "$INSTALL_DIR/$SCRIPT_NAME"
 
 # Detect the current shell
 CURRENT_SHELL=$(basename "$SHELL")
@@ -54,4 +63,4 @@ else
 fi
 
 # Success message
-echo "SSHMenu installed! You can now run it immediately using: sshmenu"
+echo "🚀 SSHMenu installed successfully! You can now run it using: sshmenu"
