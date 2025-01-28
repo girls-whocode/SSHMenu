@@ -17,24 +17,18 @@ install_help="${BLD}sshmenu$DEF requires that the package '${GRN}%s$DEF' is inst
 
 refresh_config_files() {
     echo "🔄 Refreshing SSH configuration file list..."
-    
+
     # Always start with the main SSH config file
     CONFILES="$HOME/.ssh/config"
-    
-    # Debugging: Check if main config file exists
-    if [[ ! -f "$HOME/.ssh/config" ]]; then
-        echo "⚠️ Warning: $HOME/.ssh/config does not exist!"
-        return
-    fi
-    
+
     # Extract 'Include' directives and resolve them
     while IFS= read -r include_pattern; do
         echo "🔍 Found Include directive: $include_pattern"
 
-        # Resolve relative paths (e.g., "./config.d/*") by converting to absolute paths
+        # Resolve relative and absolute paths correctly
         if [[ "$include_pattern" == ./* ]]; then
             absolute_pattern="$HOME/.ssh/${include_pattern#./}"
-        elif [[ ! "$include_pattern" =~ ^/ ]]; then  # If it's not an absolute path
+        elif [[ ! "$include_pattern" =~ ^/ ]]; then
             absolute_pattern="$HOME/.ssh/$include_pattern"
         else
             absolute_pattern="$include_pattern"
@@ -42,14 +36,9 @@ refresh_config_files() {
 
         echo "🛠 Resolved pattern: $absolute_pattern"
 
-        # Expand wildcards and append only valid SSH config files
-        for file in $absolute_pattern; do
-            if [[ -f "$file" ]]; then
-                CONFILES+=" $file"
-                echo "✅ Added: $file"
-            else
-                echo "⚠️ Skipped: $file (not found)"
-            fi
+        # Expand wildcards properly
+        for file in $(find $absolute_pattern -type f 2>/dev/null); do
+            [[ -f "$file" ]] && CONFILES+=" $file" && echo "✅ Added: $file"
         done
     done < <(grep -iE '^Include ' "$HOME/.ssh/config" | awk '{print $2}')
 
